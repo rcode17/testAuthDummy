@@ -20,4 +20,7 @@ public interface DummyClient {
 
     @GetMapping("/auth/me")
     ResponseEntity<ResponseUserInfoDTO> getUserInfo(@RequestHeader("Cookie") String token);
+    
+    @GetMapping("/users")
+    ResponseEntity<Object> getAllUsers();
 }

@@ -8,6 +8,7 @@ import com.telefonica.pruebaTecnica.clientFeign.DummyClient;
 import com.telefonica.pruebaTecnica.dto.LoginDTO;
 import com.telefonica.pruebaTecnica.dto.ResponseLoginDTO;
 import com.telefonica.pruebaTecnica.dto.ResponseUserInfoDTO;
+import com.telefonica.pruebaTecnica.exception.InvalidCredentialsException;
 import com.telefonica.pruebaTecnica.model.LoginLog;
 import com.telefonica.pruebaTecnica.repository.LoginLogRepository;
 import com.telefonica.pruebaTecnica.service.AuthService;
@@ -25,29 +26,42 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public ResponseUserInfoDTO login(LoginDTO loginRequest) {
-        
-        ResponseEntity<ResponseLoginDTO> response = dummyClient.login(loginRequest);
+        try {
+            ResponseEntity<ResponseLoginDTO> response = dummyClient.login(loginRequest);
 
-        String cookieHeader = response.getHeaders().getFirst("Set-Cookie");
-        String accessToken = (cookieHeader != null) ? cookieHeader.split(";")[0] : null;
+            String cookieHeader = response.getHeaders().getFirst("Set-Cookie");
+            String accessToken = (cookieHeader != null) ? cookieHeader.split(";")[0] : null;
 
-        if (accessToken == null || response.getBody() == null) {
-            throw new RuntimeException("Login fallido: token no encontrado");
+            if (accessToken == null || response.getBody() == null) {
+                throw new RuntimeException("Login fallido: token no encontrado");
+            }
+
+            ResponseEntity<ResponseUserInfoDTO> userResponse = dummyClient.getUserInfo(accessToken);
+            ResponseUserInfoDTO user = userResponse.getBody();
+
+            if (user != null) {
+                LoginLog log = new LoginLog();
+                log.setUsername(user.getUsername());
+                log.setLoginTime(LocalDateTime.now());
+                log.setAccessToken(accessToken);
+                log.setRefreshToken(response.getBody().getRefreshToken());
+                logRepository.save(log);
+            }
+
+            return user;
+
+        } catch (feign.FeignException.BadRequest e) {
+            try {
+                String responseBody = e.contentUTF8();
+                String message = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(responseBody)
+                    .get("message")
+                    .asText();
+                throw new InvalidCredentialsException(message);
+            } catch (Exception ex) {
+                throw new InvalidCredentialsException("Credenciales inválidas");
+            }
         }
-
-        ResponseEntity<ResponseUserInfoDTO> userResponse = dummyClient.getUserInfo(accessToken);
-        ResponseUserInfoDTO user = userResponse.getBody();
-
-        if (user != null) {
-            LoginLog log = new LoginLog();
-            log.setUsername(user.getUsername());
-            log.setLoginTime(LocalDateTime.now());
-            log.setAccessToken(accessToken); // Usamos el token real
-            log.setRefreshToken(response.getBody().getRefreshToken());
-
-            logRepository.save(log);
-        }
-
-        return user;
     }
+
 }

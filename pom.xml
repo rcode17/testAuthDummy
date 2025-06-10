@@ -79,7 +79,7 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-                <filtering>false</filtering> <!-- ✅ evita errores de codificación -->
+                <filtering>false</filtering>
             </resource>
         </resources>
         <plugins>
